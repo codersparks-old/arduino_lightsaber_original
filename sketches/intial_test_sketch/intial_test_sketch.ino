@@ -1,5 +1,5 @@
 
-
+#include <EnableInterrupt.h>
 /*
  * WT588d Sound slots
  * 
@@ -12,32 +12,90 @@
  */
 
 #define WT588D_DATA 11
+#define WT588D_RESET 3
 #define WT588D_BUSY 2
+#define INTERRUPT_POWER_PIN 7
 #define BUSY_VAL 0
+
+#define OFF_SOUND 2
+#define ON_SOUND 1
+
+#define DEBOUNCE_TIME 200
 
 bool playing = false;
 
+volatile bool power = false;
+volatile unsigned long last_interrupt_time;
+
 void setup() {
   pinMode(WT588D_DATA, OUTPUT);
+  pinMode(WT588D_RESET, OUTPUT);
+  pinMode(INTERRUPT_POWER_PIN, INPUT_PULLUP);
   Serial.begin(9600);
   while (! Serial);
+
+  last_interrupt_time = 0;
+  power = false;
+  registerPowerOffInterrupt();
+  
   Serial.println("Setup Finished");
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
 
-  playSaberSound(0);
-  waitForNotBusy();  
+  if(power) {
+    waitForNotBusy();  
+    playSaberSound(0);
+  }
 
-  playSaberSound(1);
-  waitForNotBusy();  
+  //Serial.print("Power: ");
+  //Serial.println(power);
+  
+}
 
-  playSaberSound(2);
-  waitForNotBusy();
+void powerOnInterrupt() {
+  // Do power off
 
-  delay(1000);
+  unsigned long interrupt_time = millis();
 
+  if(interrupt_time - last_interrupt_time > DEBOUNCE_TIME) {
+
+  Serial.println("Power On Interrupt fired");
+  
+    playSaberSound(OFF_SOUND);
+    power = false;
+    registerPowerOffInterrupt();
+    waitForNotBusy();  
+
+    last_interrupt_time = interrupt_time;
+  }
+  
+}
+
+void powerOffInterrupt() {
+
+  unsigned long interrupt_time = millis();
+
+  if(interrupt_time - last_interrupt_time > DEBOUNCE_TIME) {
+
+    Serial.println("Power Off Interrupt fired");
+    
+    // Do power on
+    playSaberSound(ON_SOUND);
+    power = true;
+    registerPowerOnInterrupt();
+    waitForNotBusy();  
+    
+    last_interrupt_time = interrupt_time;
+  }
+}
+
+void registerPowerOffInterrupt() {
+  enableInterrupt(INTERRUPT_POWER_PIN, powerOffInterrupt, CHANGE);
+}
+
+void registerPowerOnInterrupt() {
+  enableInterrupt(INTERRUPT_POWER_PIN, powerOnInterrupt, CHANGE);
 }
 
 /*
@@ -45,6 +103,8 @@ void loop() {
  */
 void playSaberSound(byte b) {
   digitalWrite(WT588D_DATA, 0); // Pull DATA low to wake up chip
+  // Stop any playing sounds
+  resetSoundBoard();
   delay(5);
   Serial.print("Playing sound: ");
   Serial.println(b);
@@ -66,6 +126,16 @@ void playSaberSound(byte b) {
 
     digitalWrite(WT588D_DATA, 1);
   }
+
+  delayMicroseconds(100);
+}
+
+void resetSoundBoard() {
+   digitalWrite(WT588D_RESET, LOW);
+   delayMicroseconds(100);
+   digitalWrite(WT588D_RESET, HIGH);
+   delayMicroseconds(1000);
+   
 }
 
 void waitForNotBusy() {
@@ -87,7 +157,7 @@ void waitForNotBusy() {
     Serial.print(" Playing: ");
     Serial.println(playing);
 
-    delay(500);
+    //delay(500);
   }
 }
 
