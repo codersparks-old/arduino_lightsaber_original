@@ -34,7 +34,9 @@ void loop() {
   waitForNotBusy();  
 
   playSaberSound(2);
-  waitForNotBusy();  
+  waitForNotBusy();
+
+  delay(1000);
 
 }
 
